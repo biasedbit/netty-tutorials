@@ -3,14 +3,14 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.biasedbit.nettytutorials</groupId>
-  <artifactId>handshake</artifactId>
+  <artifactId>customcodecs</artifactId>
   <version>1.0.0</version>
   <packaging>jar</packaging>
 
-  <name>netty tutorial - handshaking</name>
+  <name>netty tutorial - customcodecs</name>
   <url>http://bruno.biasedbit.com/blag/</url>
   <description>
-    Netty tutorials - handshaking
+    Netty tutorials - custom codecs
   </description>
   <inceptionYear>2010</inceptionYear>
   <developers>
@@ -35,7 +35,7 @@
   <repositories>
     <repository>
       <id>repository.jboss.org</id>
-      <url>http://repository.jboss.org/nexus/content/groups/public/</url>
+      <url>http://repository.jboss.org/nexus/payload/groups/public/</url>
       <snapshots>
         <enabled>false</enabled>
       </snapshots>
