@@ -8,7 +8,10 @@ import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.handler.codec.oneone.OneToOneEncoder;
 
 /**
- * OneToOneEncoder implementation that converts an Envelope instance into a ChannelBuffer
+ * OneToOneEncoder implementation that converts an Envelope instance into a ChannelBuffer.
+ *
+ * Since the encoder is stateless, a single instance can be shared among all pipelines, hence the @Sharable annotation
+ * and the singleton instantiation.
  */
 @ChannelHandler.Sharable
 public class Encoder extends OneToOneEncoder {

@@ -1,9 +1,9 @@
 package com.biasedbit.nettytutorials.customcodecs.client;
 
 import com.biasedbit.nettytutorials.customcodecs.common.ByteCounter;
-import com.biasedbit.nettytutorials.customcodecs.common.Envelope;
 import com.biasedbit.nettytutorials.customcodecs.common.Decoder;
 import com.biasedbit.nettytutorials.customcodecs.common.Encoder;
+import com.biasedbit.nettytutorials.customcodecs.common.Envelope;
 import com.biasedbit.nettytutorials.customcodecs.common.Type;
 import com.biasedbit.nettytutorials.customcodecs.common.Version;
 import org.jboss.netty.bootstrap.ClientBootstrap;
@@ -14,12 +14,14 @@ import org.jboss.netty.channel.Channels;
 import org.jboss.netty.channel.group.ChannelGroup;
 import org.jboss.netty.channel.group.DefaultChannelGroup;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+import org.jboss.netty.handler.codec.serialization.ObjectDecoder;
+import org.jboss.netty.handler.codec.serialization.ObjectEncoder;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class Client implements ClientHandlerListener {
+public class ClientJavaSerialization implements ClientHandlerListener {
 
     // configuration --------------------------------------------------------------------------------------------------
 
@@ -39,7 +41,7 @@ public class Client implements ClientHandlerListener {
 
     // constructors ---------------------------------------------------------------------------------------------------
 
-    public Client(String host, int port, int messages, int floods) {
+    public ClientJavaSerialization(String host, int port, int messages, int floods) {
         this.host = host;
         this.port = port;
         this.messages = messages;
@@ -83,8 +85,8 @@ public class Client implements ClientHandlerListener {
             public ChannelPipeline getPipeline() throws Exception {
                 ChannelPipeline pipeline = Channels.pipeline();
                 pipeline.addLast("byteCounter", new ByteCounter("clientByteCounter"));
-                pipeline.addLast("encoder", Encoder.getInstance());
-                pipeline.addLast("decoder", new Decoder());
+                pipeline.addLast("encoder", new ObjectEncoder());
+                pipeline.addLast("decoder", new ObjectDecoder());
                 pipeline.addLast("handler", handler);
                 return pipeline;
             }
@@ -128,7 +130,7 @@ public class Client implements ClientHandlerListener {
     // main -----------------------------------------------------------------------------------------------------------
 
     public static void main(String[] args) throws InterruptedException {
-        final Client client = new Client("localhost", 9999, 100000, 1);
+        final ClientJavaSerialization client = new ClientJavaSerialization("localhost", 9999, 100000, 10);
 
         if (!client.start()) {
 

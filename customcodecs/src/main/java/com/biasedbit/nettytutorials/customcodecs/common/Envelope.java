@@ -1,6 +1,8 @@
 package com.biasedbit.nettytutorials.customcodecs.common;
 
-public class Envelope {
+import java.io.Serializable;
+
+public class Envelope implements Serializable {
 
     // internal vars --------------------------------------------------------------------------------------------------
 

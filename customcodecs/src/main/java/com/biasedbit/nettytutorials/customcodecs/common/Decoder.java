@@ -20,8 +20,9 @@ public class Decoder extends ReplayingDecoder<Decoder.DecodingState> {
     // ReplayingDecoder -----------------------------------------------------------------------------------------------
 
     @Override
-    protected Object decode(ChannelHandlerContext ctx, Channel channel, ChannelBuffer buffer,
-                            DecodingState state) throws Exception {
+    protected Object decode(ChannelHandlerContext ctx, Channel channel,
+                            ChannelBuffer buffer, DecodingState state)
+            throws Exception {
         // notice the switch fall-through
         switch (state) {
             case VERSION:
@@ -43,7 +44,8 @@ public class Decoder extends ReplayingDecoder<Decoder.DecodingState> {
                 // drain the channel buffer to the message content buffer
                 // I have no idea what the contents are, but I'm sure you'll figure out how to turn these
                 // bytes into useful content.
-                buffer.readBytes(this.message.getPayload(), 0, this.message.getPayload().length);
+                buffer.readBytes(this.message.getPayload(), 0,
+                                 this.message.getPayload().length);
 
                 // This is the only exit point of this method (except for the two other exceptions that
                 // should never occur).
