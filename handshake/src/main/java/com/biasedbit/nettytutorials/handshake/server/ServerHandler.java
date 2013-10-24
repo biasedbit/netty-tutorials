@@ -1,19 +1,16 @@
 package com.biasedbit.nettytutorials.handshake.server;
 
 import com.biasedbit.nettytutorials.handshake.common.HandshakeEvent;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelEvent;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.channel.ChannelStateEvent;
-import org.jboss.netty.channel.MessageEvent;
-import org.jboss.netty.channel.SimpleChannelUpstreamHandler;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author <a href="mailto:bruno@biasedbit.com">Bruno de Carvalho</a>
  */
-public class ServerHandler extends SimpleChannelUpstreamHandler {
+public class ServerHandler extends ChannelInboundHandlerAdapter {
 
     // internal vars ----------------------------------------------------------
 
@@ -32,14 +29,14 @@ public class ServerHandler extends SimpleChannelUpstreamHandler {
     // SimpleChannelUpstreamHandler -------------------------------------------
 
     @Override
-    public void handleUpstream(ChannelHandlerContext ctx, ChannelEvent e)
+    public void userEventTriggered(ChannelHandlerContext ctx, Object e)
             throws Exception {
         if (e instanceof HandshakeEvent) {
             if (((HandshakeEvent) e).isSuccessful()) {
                 out("+++ SERVER-HANDLER :: Handshake successful, connection " +
                     "to " + ((HandshakeEvent) e).getRemoteId() + " is up.");
                 this.remoteId = ((HandshakeEvent) e).getRemoteId();
-                this.channel = ctx.getChannel();
+                this.channel = ctx.channel();
                 // Notify the listener that a new connection is now READY
                 this.listener.connectionOpen(this);
             } else {
@@ -48,31 +45,30 @@ public class ServerHandler extends SimpleChannelUpstreamHandler {
             return;
         }
 
-        super.handleUpstream(ctx, e);
+        super.userEventTriggered(ctx, e);
     }
 
     @Override
-    public void messageReceived(ChannelHandlerContext ctx, MessageEvent e)
+    public void channelRead(ChannelHandlerContext ctx, Object msg) 
             throws Exception {
         this.counter.incrementAndGet();
-        this.listener.messageReceived(this, e.getMessage().toString());
+        this.listener.messageReceived(this, msg.toString());
     }
 
     @Override
-    public void channelClosed(ChannelHandlerContext ctx, ChannelStateEvent e)
-            throws Exception {
-        super.channelClosed(ctx, e);
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        super.channelInactive(ctx);
         out("+++ SERVER-HANDLER :: Channel closed, received " +
-            this.counter.get() + " messages: " + e.getChannel());
+            this.counter.get() + " messages: " + ctx.channel());
     }
 
     // public methods ---------------------------------------------------------
 
     public void sendMessage(String message) {
         if (!message.endsWith("\n")) {
-            this.channel.write(message + '\n');
+            this.channel.writeAndFlush(message + '\n');
         } else {
-            this.channel.write(message);
+            this.channel.writeAndFlush(message);
         }
     }
 

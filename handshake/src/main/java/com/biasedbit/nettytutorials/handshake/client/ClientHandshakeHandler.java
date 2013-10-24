@@ -2,16 +2,12 @@ package com.biasedbit.nettytutorials.handshake.client;
 
 import com.biasedbit.nettytutorials.handshake.common.Challenge;
 import com.biasedbit.nettytutorials.handshake.common.HandshakeEvent;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFuture;
-import org.jboss.netty.channel.ChannelFutureListener;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.channel.ChannelStateEvent;
-import org.jboss.netty.channel.Channels;
-import org.jboss.netty.channel.DownstreamMessageEvent;
-import org.jboss.netty.channel.ExceptionEvent;
-import org.jboss.netty.channel.MessageEvent;
-import org.jboss.netty.channel.SimpleChannelHandler;
+import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
+import java.nio.channels.Channels;
 
 import java.util.ArrayDeque;
 import java.util.Queue;
@@ -22,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * @author <a href="mailto:bruno@biasedbit.com">Bruno de Carvalho</a>
  */
-public class ClientHandshakeHandler extends SimpleChannelHandler {
+public class ClientHandshakeHandler extends ChannelDuplexHandler {
 
     // internal vars ----------------------------------------------------------
 
@@ -32,7 +28,7 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
     private final AtomicBoolean handshakeComplete;
     private final AtomicBoolean handshakeFailed;
     private final CountDownLatch latch = new CountDownLatch(1);
-    private final Queue<MessageEvent> messages = new ArrayDeque<MessageEvent>();
+    private final Queue<Object> messages = new ArrayDeque<Object>();
     private final Object handshakeMutex = new Object();
     private String challenge;
 
@@ -50,8 +46,8 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
     // SimpleChannelHandler ---------------------------------------------------
 
     @Override
-    public void messageReceived(ChannelHandlerContext ctx, MessageEvent e)
-            throws Exception {
+    public void channelRead(ChannelHandlerContext ctx,
+            Object msg) throws Exception {
         if (this.handshakeFailed.get()) {
             // Bail out fast if handshake already failed
             return;
@@ -62,7 +58,7 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
             // handler, then immediately send it upwards.
             // Chances are it's the last time a message passes through
             // this handler...
-            super.messageReceived(ctx, e);
+            super.channelRead(ctx, msg);
             return;
         }
 
@@ -74,13 +70,13 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
             }
 
             if (this.handshakeComplete.get()) {
-                super.messageReceived(ctx, e);
+                super.channelRead(ctx, msg);
                 return;
             }
 
             // Parse the challenge.
             // Expected format is "clientId:serverId:challenge"
-            String[] params = ((String) e.getMessage()).trim().split(":");
+            String[] params = ((String) msg).trim().split(":");
             if (params.length != 3) {
                 out("--- CLIENT-HS :: Invalid handshake: expected 3 params, " +
                     "got " + params.length);
@@ -125,12 +121,13 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
             // to pass through this class's writeRequest() and be re-queued.
             out("--- CLIENT-HS :: " + this.messages.size() +
                 " messages in queue to be flushed.");
-            for (MessageEvent message : this.messages) {
-                ctx.sendDownstream(message);
+            for (Object message : this.messages) {
+                ctx.write(message);
             }
+            ctx.flush();
 
             // Remove this handler from the pipeline; its job is finished.
-            ctx.getPipeline().remove(this);
+            ctx.pipeline().remove(this);
 
             // Finally fire success message upwards.
             this.fireHandshakeSucceeded(this.remoteId, ctx);
@@ -138,13 +135,20 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
     }
 
     @Override
-    public void channelConnected(final ChannelHandlerContext ctx,
-                                 ChannelStateEvent e) throws Exception {
+    public void channelActive(final ChannelHandlerContext ctx) 
+            throws Exception {
         out("--- CLIENT-HS :: Outgoing connection established to: " +
-            e.getChannel().getRemoteAddress());
+            ctx.channel().remoteAddress());
 
         // Write the handshake & add a timeout listener.
-        ChannelFuture f = Channels.future(ctx.getChannel());
+        this.challenge = Challenge.generateChallenge();
+        String handshake =
+                this.localId + ':' + this.remoteId + ':' + challenge + '\n';
+
+        // We need to write to ctx directly rather than call 
+        // ctx.channel().write() otherwise the message would pass through this
+        // class's write() method defined below.
+        ChannelFuture f = ctx.writeAndFlush(handshake);
         f.addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future)
@@ -213,23 +217,10 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
                 }.start();
             }
         });
-
-        this.challenge = Challenge.generateChallenge();
-        String handshake =
-                this.localId + ':' + this.remoteId + ':' + challenge + '\n';
-        Channel c = ctx.getChannel();
-        // Passing null as remoteAddress, since constructor in
-        // DownstreamMessageEvent will use remote address from the channel if
-        // remoteAddress is null.
-        // Also, we need to send the data directly downstream rather than
-        // call c.write() otherwise the message would pass through this
-        // class's writeRequested() method defined below.
-        ctx.sendDownstream(new DownstreamMessageEvent(c, f, handshake, null));
     }
 
     @Override
-    public void channelClosed(ChannelHandlerContext ctx, ChannelStateEvent e)
-            throws Exception {
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         out("--- CLIENT-HS :: Channel closed.");
         if (!this.handshakeComplete.get()) {
             this.fireHandshakeFailed(ctx);
@@ -237,13 +228,13 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
     }
 
     @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e)
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause)
             throws Exception {
         out("--- CLIENT-HS :: Exception caught.");
-        e.getCause().printStackTrace();
-        if (e.getChannel().isConnected()) {
+        cause.printStackTrace();
+        if (ctx.channel().isActive()) {
             // Closing the channel will trigger handshake failure.
-            e.getChannel().close();
+            ctx.channel().close();
         } else {
             // Channel didn't open, so we must fire handshake failure directly.
             this.fireHandshakeFailed(ctx);
@@ -251,8 +242,8 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
     }
 
     @Override
-    public void writeRequested(ChannelHandlerContext ctx, MessageEvent e)
-            throws Exception {
+    public void write(ChannelHandlerContext ctx, Object msg, 
+            ChannelPromise promise) throws Exception {
         // Before doing anything, ensure that noone else is working by
         // acquiring a lock on the handshakeMutex.
         synchronized (this.handshakeMutex) {
@@ -266,13 +257,13 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
             // them downwards.
             if (this.handshakeComplete.get()) {
                 out("--- CLIENT-HS :: Handshake already completed, not " +
-                    "appending '" + e.getMessage().toString().trim() +
+                    "appending '" + msg.toString().trim() +
                     "' to queue!");
-                super.writeRequested(ctx, e);
+                super.write(ctx, msg, promise);
             } else {
                 // Otherwise, queue messages in order until the handshake
                 // completes.
-                this.messages.offer(e);
+                this.messages.offer(msg);
             }
         }
     }
@@ -289,8 +280,8 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
         this.handshakeComplete.set(true);
         this.handshakeFailed.set(true);
         this.latch.countDown();
-        ctx.getChannel().close();
-        ctx.sendUpstream(HandshakeEvent.handshakeFailed(ctx.getChannel()));
+        ctx.channel().close();
+        ctx.fireUserEventTriggered(HandshakeEvent.handshakeFailed());
     }
 
     private void fireHandshakeSucceeded(String server,
@@ -298,7 +289,6 @@ public class ClientHandshakeHandler extends SimpleChannelHandler {
         this.handshakeComplete.set(true);
         this.handshakeFailed.set(false);
         this.latch.countDown();
-        ctx.sendUpstream(HandshakeEvent
-                .handshakeSucceeded(server, ctx.getChannel()));
+        ctx.fireUserEventTriggered(HandshakeEvent.handshakeSucceeded(server));
     }
 }

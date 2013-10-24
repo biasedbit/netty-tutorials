@@ -1,18 +1,17 @@
 package com.biasedbit.nettytutorials.handshake.common;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.channel.ChannelStateEvent;
-import org.jboss.netty.channel.MessageEvent;
-import org.jboss.netty.channel.SimpleChannelUpstreamHandler;
-import org.jboss.netty.channel.WriteCompletionEvent;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.ByteBufHolder;
+import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author <a href="mailto:bruno@biasedbit.com">Bruno de Carvalho</a>
  */
-public class ByteCounter extends SimpleChannelUpstreamHandler {
+public class ByteCounter extends ChannelDuplexHandler {
 
     // internal vars ----------------------------------------------------------
 
@@ -29,30 +28,41 @@ public class ByteCounter extends SimpleChannelUpstreamHandler {
     }
 
     // SimpleChannelUpstreamHandler -------------------------------------------
-
+    
     @Override
-    public void messageReceived(ChannelHandlerContext ctx, MessageEvent e)
+    public void channelRead(ChannelHandlerContext ctx, Object msg)
             throws Exception {
-        if (e.getMessage() instanceof ChannelBuffer) {
-            this.readBytes.addAndGet(((ChannelBuffer) e.getMessage())
-                    .readableBytes());
+        long size;
+        if (msg instanceof ByteBuf) {
+            size = ((ByteBuf) msg).readableBytes();
+        } else if (msg instanceof ByteBufHolder) {
+            size = ((ByteBufHolder) msg).content().readableBytes();
+        } else {
+            size = -1;
         }
-
-        super.messageReceived(ctx, e);
+        readBytes.addAndGet(size);
+        ctx.fireChannelRead(msg);
     }
 
     @Override
-    public void writeComplete(ChannelHandlerContext ctx, WriteCompletionEvent e)
-            throws Exception {
-        super.writeComplete(ctx, e);
-        this.writtenBytes.addAndGet(e.getWrittenAmount());
+    public void write(ChannelHandlerContext ctx, Object msg, 
+            ChannelPromise promise) throws Exception {
+        long size;
+        if (msg instanceof ByteBuf) {
+            size = ((ByteBuf) msg).writableBytes();
+        } else if (msg instanceof ByteBufHolder) {
+            size = ((ByteBufHolder) msg).content().writableBytes();
+        } else {
+            size = -1;
+        }
+        writtenBytes.addAndGet(size);
+        ctx.write(msg, promise);
     }
 
     @Override
-    public void channelClosed(ChannelHandlerContext ctx, ChannelStateEvent e)
-            throws Exception {
-        super.channelClosed(ctx, e);
-        System.out.println(this.id + ctx.getChannel() + " -> sent: " +
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        ctx.fireChannelInactive();
+        System.out.println(this.id + ctx.channel() + " -> sent: " +
                            this.getWrittenBytes() + "b, recv: " +
                            this.getReadBytes() + "b");
     }
