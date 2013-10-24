@@ -1,18 +1,15 @@
 package com.biasedbit.nettytutorials.handshake.client;
 
 import com.biasedbit.nettytutorials.handshake.common.HandshakeEvent;
-import org.jboss.netty.channel.ChannelEvent;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.channel.ChannelStateEvent;
-import org.jboss.netty.channel.MessageEvent;
-import org.jboss.netty.channel.SimpleChannelUpstreamHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author <a href="mailto:bruno@biasedbit.com">Bruno de Carvalho</a>
  */
-public class ClientHandler extends SimpleChannelUpstreamHandler {
+public class ClientHandler extends ChannelInboundHandlerAdapter {
 
     // internal vars ----------------------------------------------------------
 
@@ -29,7 +26,7 @@ public class ClientHandler extends SimpleChannelUpstreamHandler {
     // SimpleChannelUpstreamHandler -------------------------------------------
 
     @Override
-    public void handleUpstream(ChannelHandlerContext ctx, ChannelEvent e)
+    public void userEventTriggered(ChannelHandlerContext ctx, Object e)
             throws Exception {
         if (e instanceof HandshakeEvent) {
             if (((HandshakeEvent) e).isSuccessful()) {
@@ -41,22 +38,21 @@ public class ClientHandler extends SimpleChannelUpstreamHandler {
             return;
         }
 
-        super.handleUpstream(ctx, e);
+        super.userEventTriggered(ctx, e);
     }
 
     @Override
-    public void messageReceived(ChannelHandlerContext ctx, MessageEvent e)
+    public void channelRead(ChannelHandlerContext ctx, Object msg)
             throws Exception {
         this.counter.incrementAndGet();
-        this.listener.messageReceived(e.getMessage().toString());
+        this.listener.messageReceived(msg.toString());
     }
 
     @Override
-    public void channelClosed(ChannelHandlerContext ctx, ChannelStateEvent e)
-            throws Exception {
-        super.channelClosed(ctx, e);
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        super.channelInactive(ctx);
         out("--- CLIENT-HANDLER :: Channel closed, received " +
-            this.counter.get() + " messages: " + e.getChannel());
+            this.counter.get() + " messages: " + ctx.channel());
     }
 
     // private static helpers -------------------------------------------------

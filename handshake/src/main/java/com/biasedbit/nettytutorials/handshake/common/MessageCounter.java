@@ -1,16 +1,15 @@
 package com.biasedbit.nettytutorials.handshake.common;
 
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.channel.ChannelStateEvent;
-import org.jboss.netty.channel.MessageEvent;
-import org.jboss.netty.channel.SimpleChannelHandler;
+import io.netty.channel.ChannelDuplexHandler;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
 
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author <a href="mailto:bruno@biasedbit.com">Bruno de Carvalho</a>
  */
-public class MessageCounter extends SimpleChannelHandler {
+public class MessageCounter extends ChannelDuplexHandler {
 
     // internal vars ----------------------------------------------------------
 
@@ -29,24 +28,23 @@ public class MessageCounter extends SimpleChannelHandler {
     // SimpleChannelHandler ---------------------------------------------------
 
     @Override
-    public void messageReceived(ChannelHandlerContext ctx, MessageEvent e)
-            throws Exception {
-        this.readMessages.incrementAndGet();
-        super.messageReceived(ctx, e);
+    public void channelRead(ChannelHandlerContext ctx, 
+            Object msg) throws Exception {
+        readMessages.incrementAndGet();
+        ctx.fireChannelRead(msg);
     }
 
     @Override
-    public void writeRequested(ChannelHandlerContext ctx, MessageEvent e)
-            throws Exception {
-        this.writtenMessages.incrementAndGet();
-        super.writeRequested(ctx, e);
+    public void write(ChannelHandlerContext ctx, Object msg, 
+            ChannelPromise promise) throws Exception {
+        writtenMessages.incrementAndGet();
+        ctx.write(msg, promise);
     }
 
     @Override
-    public void channelClosed(ChannelHandlerContext ctx, ChannelStateEvent e)
-            throws Exception {
-        super.channelClosed(ctx, e);
-        System.out.println(this.id + ctx.getChannel() + " -> sent: " +
+    public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+        ctx.fireChannelInactive();
+        System.out.println(this.id + ctx.channel() + " -> sent: " +
                            this.getWrittenMessages() + ", recv: " +
                            this.getReadMessages());
     }
